@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#7b1e3b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Wine Index</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg:#f6f5f3; --card:#ffffff; --ink:#1c1b1a; --muted:#7a7570;
+    --line:#e7e3dd; --accent:#7b1e3b; --accent-soft:#f3e7eb;
+    --gold:#b08948; --good:#2f8f5b; --shadow:0 1px 3px rgba(0,0,0,.06),0 6px 20px rgba(0,0,0,.05);
+    --radius:16px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.45;
+    padding-bottom:90px; -webkit-font-smoothing:antialiased;
+  }
+  header{
+    position:sticky; top:0; z-index:30; background:rgba(246,245,243,.92);
+    backdrop-filter:saturate(180%) blur(12px); border-bottom:1px solid var(--line);
+    padding:calc(env(safe-area-inset-top) + 14px) 18px 12px;
+  }
+  .brand{display:flex; align-items:center; gap:10px}
+  .brand h1{font-size:20px; margin:0; font-weight:700; letter-spacing:-.02em}
+  .brand .dot{width:11px;height:11px;border-radius:50%;background:var(--accent)}
+  .sub{color:var(--muted); font-size:12.5px; margin-top:2px}
+  .wrap{max-width:680px; margin:0 auto; padding:16px}
+
+  /* Stats strip */
+  .stats{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px}
+  .stat{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; text-align:center; box-shadow:var(--shadow)}
+  .stat b{display:block; font-size:20px; letter-spacing:-.02em}
+  .stat span{font-size:11px; color:var(--muted)}
+
+  /* Controls */
+  .controls{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:12px; box-shadow:var(--shadow); margin-bottom:14px}
+  .search{display:flex; gap:8px}
+  .search input{flex:1}
+  .filters{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px}
+  .filters .full{grid-column:1/-1}
+  label.fld{font-size:11px; color:var(--muted); display:block; margin:0 0 3px 2px}
+  input,select,textarea,button{font-family:inherit; font-size:15px}
+  input,select,textarea{
+    width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:11px;
+    background:#fff; color:var(--ink); outline:none;
+  }
+  input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px}
+
+  button{cursor:pointer; border:none; border-radius:11px; padding:11px 14px; font-weight:600}
+  .btn-primary{background:var(--accent); color:#fff; width:100%}
+  .btn-ghost{background:var(--accent-soft); color:var(--accent)}
+  .btn-line{background:#fff; border:1px solid var(--line); color:var(--ink)}
+  .btn-sm{padding:8px 10px; font-size:13px; border-radius:9px}
+
+  /* Cards */
+  .list{display:flex; flex-direction:column; gap:12px}
+  .wine{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; display:flex}
+  .wine .thumb{width:96px; min-width:96px; background:#efe9e3 center/cover no-repeat; position:relative}
+  .wine .thumb.empty{display:flex; align-items:center; justify-content:center; color:#b6a; font-size:30px; cursor:pointer; background:repeating-linear-gradient(45deg,#efe9e3,#efe9e3 8px,#eae3db 8px,#eae3db 16px)}
+  .wine .thumb.empty .ap{color:var(--accent); text-align:center; line-height:1.15}
+  .wine .thumb.empty .ap small{font-size:9px; letter-spacing:.02em; display:block}
+  .wine .body{padding:12px 13px; flex:1; min-width:0}
+  .wine h3{margin:0 0 2px; font-size:16px; letter-spacing:-.01em; line-height:1.25}
+  .meta{font-size:12.5px; color:var(--muted); margin-bottom:8px}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px}
+  .chip{font-size:11px; padding:3px 8px; border-radius:999px; background:#f1ede8; color:#5c554e}
+  .chip.loc{background:var(--accent-soft); color:var(--accent); font-weight:600}
+  .pricerow{display:flex; gap:14px; flex-wrap:wrap; font-size:13px}
+  .pricerow .k{color:var(--muted); font-size:11px; display:block}
+  .pricerow .v{font-weight:700}
+  .score{display:inline-flex; align-items:center; gap:4px; font-weight:700; color:var(--gold)}
+  .delta-up{color:var(--good)} .delta-down{color:#b13b3b}
+  .cardacts{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+
+  .empty-state{text-align:center; color:var(--muted); padding:40px 20px}
+  .empty-state .big{font-size:42px; margin-bottom:8px}
+
+  /* Floating add button */
+  .fab{position:fixed; right:18px; bottom:calc(env(safe-area-inset-bottom) + 18px); z-index:40;
+    background:var(--accent); color:#fff; width:58px; height:58px; border-radius:50%;
+    font-size:30px; line-height:1; box-shadow:0 6px 18px rgba(123,30,59,.4); display:flex; align-items:center; justify-content:center}
+  .fab2{position:fixed; right:22px; bottom:calc(env(safe-area-inset-bottom) + 88px); z-index:40;
+    background:#fff; color:var(--accent); border:1px solid var(--line); width:50px; height:50px; border-radius:50%;
+    font-size:22px; line-height:1; box-shadow:0 4px 14px rgba(0,0,0,.15); display:flex; align-items:center; justify-content:center}
+  .invrow{background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:10px}
+  .invrow input{margin:0}
+  .ai-spin{display:inline-block; width:14px; height:14px; border:2px solid var(--accent-soft); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; vertical-align:-2px; margin-right:6px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* Auth gate */
+  #authGate{position:fixed; inset:0; z-index:200; background:linear-gradient(160deg,#7b1e3b,#4a1224); color:#fff; display:flex; align-items:center; justify-content:center; padding:24px}
+  #authGate .gatebox{max-width:380px; width:100%; text-align:center}
+  #authGate h1{font-size:30px; margin:0 0 6px; letter-spacing:-.02em}
+  #authGate p{color:#f0d9e1; font-size:14px; line-height:1.5; margin:0 0 22px}
+  .gbtn{display:inline-flex; align-items:center; gap:10px; background:#fff; color:#1c1b1a; border:none; border-radius:12px; padding:13px 20px; font-size:15px; font-weight:600; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.2)}
+  .gbtn img{width:18px; height:18px}
+  #gateMsg{color:#ffd7e1; font-size:12.5px; min-height:16px; margin-top:14px}
+  #gateConfig textarea{width:100%; height:150px; border-radius:10px; border:none; padding:10px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; margin-bottom:10px}
+  #gateConfig .gbtn{width:100%; justify-content:center}
+  .gate-acct{display:flex; align-items:center; justify-content:space-between; gap:10px; background:#faf8f5; border:1px solid var(--line); border-radius:11px; padding:10px 12px; margin-bottom:14px; font-size:13px}
+
+  /* Sync status pill */
+  .syncpill{font-size:11px; padding:3px 9px; border-radius:999px; align-items:center; gap:5px; background:#e9f3ec; color:var(--good); font-weight:600}
+  .syncpill .d{width:7px; height:7px; border-radius:50%; background:currentColor}
+  .syncpill.syncing{background:#fbf0db; color:#9a6b1a}
+  .syncpill.offline{background:#efeae4; color:#7a7570}
+  .syncpill .ai-spin{width:10px; height:10px; border-width:2px; margin:0}
+
+  .copyrow{display:flex; gap:8px}
+  .copyrow input{flex:1; min-width:0; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px}
+  .copyrow button{white-space:nowrap}
+
+  /* Modal / sheet */
+  .sheet-bg{position:fixed; inset:0; background:rgba(20,16,18,.45); z-index:50; display:none; align-items:flex-end; justify-content:center}
+  .sheet-bg.open{display:flex}
+  .sheet{background:var(--bg); width:100%; max-width:680px; max-height:94vh; overflow-y:auto; border-radius:22px 22px 0 0; padding:8px 18px calc(env(safe-area-inset-bottom) + 24px)}
+  .sheet .grab{width:40px; height:4px; background:#d8d2ca; border-radius:2px; margin:8px auto 6px}
+  .sheet h2{font-size:19px; margin:6px 2px 14px}
+  .field{margin-bottom:12px}
+  .photo-pick{display:flex; gap:10px; margin-bottom:14px}
+  .photo-pick .preview{width:84px; height:84px; border-radius:12px; background:#efe9e3 center/cover no-repeat; display:flex; align-items:center; justify-content:center; color:#c9bfb4; font-size:26px; border:1px solid var(--line)}
+  .photo-pick .pbtns{display:flex; flex-direction:column; gap:8px; flex:1; justify-content:center}
+  .hint{font-size:11.5px; color:var(--muted); margin-top:4px}
+  .sheet-actions{display:flex; gap:10px; margin-top:8px}
+  .sheet-actions button{flex:1}
+  .link-vivino{font-size:12.5px; color:var(--accent); text-decoration:none; display:inline-block; margin-top:4px}
+
+  .seg{display:flex; background:#ece7e1; border-radius:11px; padding:3px; gap:3px; margin-bottom:10px}
+  .seg button{flex:1; background:transparent; color:var(--muted); padding:8px; font-size:13px; border-radius:9px}
+  .seg button.active{background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08)}
+
+  .loc-manage{display:flex; flex-direction:column; gap:8px}
+  .loc-item{display:flex; align-items:center; justify-content:space-between; background:#fff; border:1px solid var(--line); border-radius:11px; padding:10px 12px}
+  .loc-item button{background:none; color:#b13b3b; padding:4px 8px; font-weight:600}
+  .addloc{display:flex; gap:8px}
+  .toast{position:fixed; left:50%; transform:translateX(-50%); bottom:90px; background:#1c1b1a; color:#fff; padding:10px 16px; border-radius:10px; font-size:13.5px; z-index:80; opacity:0; transition:opacity .25s; pointer-events:none}
+  .toast.show{opacity:1}
+  hr{border:none; border-top:1px solid var(--line); margin:16px 0}
+
+  /* View tabs (Cellar / Drunk) */
+  .viewtabs{display:flex; background:#ece7e1; border-radius:12px; padding:4px; gap:4px; margin-bottom:14px}
+  .viewtabs button{flex:1; background:transparent; color:var(--muted); padding:10px; font-size:14px; font-weight:600; border-radius:9px}
+  .viewtabs button.active{background:#fff; color:var(--accent); box-shadow:0 1px 2px rgba(0,0,0,.08)}
+
+  /* Star rating */
+  .stars{display:flex; gap:8px; font-size:34px; line-height:1; color:#d8d2ca; user-select:none}
+  .stars span{cursor:pointer; transition:transform .08s}
+  .stars span:active{transform:scale(1.2)}
+  .stars span.on{color:var(--gold)}
+  .rating-display{color:var(--gold); font-weight:700; letter-spacing:2px; font-size:15px}
+
+  /* Tasting note blocks on drunk cards */
+  .note-block{background:#faf8f5; border:1px solid var(--line); border-radius:10px; padding:8px 10px; font-size:13px; margin-top:8px; white-space:pre-wrap}
+  .note-block .lbl{font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); display:block; margin-bottom:2px}
+</style>
+</head>
+<body>
+<!-- Sign-in gate (shown until authenticated) -->
+<div id="authGate" style="display:flex">
+  <div class="gatebox">
+    <h1>🍷 Wine Index</h1>
+    <div id="gateSignin">
+      <p>Sign in to access your cellar on any device.</p>
+      <button class="gbtn" id="gateSignInBtn"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="">Sign in with Google</button>
+    </div>
+    <div id="gateConfig" style="display:none">
+      <p>First-time setup: paste your Firebase config to connect your account (see FIREBASE-SYNC.md).</p>
+      <textarea id="fbCfgInput" placeholder='{ "apiKey": "…", "authDomain": "…", "projectId": "…", "appId": "…" }'></textarea>
+      <button class="gbtn" id="fbSaveCfg">Connect</button>
+    </div>
+    <div id="gateMsg"></div>
+  </div>
+</div>
+
+<header>
+  <div class="wrap" style="padding:0">
+    <div class="brand" style="justify-content:space-between">
+      <span style="display:flex; align-items:center; gap:10px"><span class="dot"></span><h1>Wine Index</h1></span>
+      <span id="syncPill" class="syncpill" style="display:none"></span>
+    </div>
+    <div class="sub" id="subline">Your personal cellar</div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="viewtabs">
+    <button id="tabActive" class="active">🍷 Cellar</button>
+    <button id="tabDrunk">🥂 Drunk</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b id="stCount">0</b><span id="stCountL">Bottles</span></div>
+    <div class="stat"><b id="stPaid">£0</b><span>Total paid</span></div>
+    <div class="stat"><b id="stValue">£0</b><span id="stValueL">Market value</span></div>
+  </div>
+
+  <div class="controls">
+    <div class="search">
+      <input id="q" type="search" placeholder="Search name, grape, region…" autocomplete="off">
+      <button class="btn-line btn-sm" id="locBtn" title="Storage locations">📍</button>
+      <button class="btn-line btn-sm" id="backupBtn" title="Backup & export">⬇</button>
+      <button class="btn-line btn-sm" id="aiBtn" title="AI auto-fill settings">✨</button>
+    </div>
+    <div class="filters">
+      <div><label class="fld">Type</label>
+        <select id="fType"><option value="">All</option><option>Red</option><option>White</option><option>Rosé</option><option>Orange</option><option>Sparkling</option><option>Dessert</option><option>Fortified</option></select></div>
+      <div><label class="fld">Country</label><select id="fCountry"><option value="">All</option></select></div>
+      <div><label class="fld">Region</label><select id="fRegion"><option value="">All</option></select></div>
+      <div><label class="fld">Location</label><select id="fLoc"><option value="">All</option></select></div>
+      <div><label class="fld">Min Vivino score</label>
+        <select id="fScore"><option value="">Any</option><option>3.5</option><option>3.8</option><option>4.0</option><option>4.2</option><option>4.5</option></select></div>
+      <div><label class="fld">Min price (£)</label><input id="fMin" type="number" inputmode="numeric" placeholder="0"></div>
+      <div><label class="fld">Max price (£)</label><input id="fMax" type="number" inputmode="numeric" placeholder="∞"></div>
+      <div class="full"><label class="fld">Sort by</label>
+        <select id="fSort">
+          <option value="added_desc">Recently added</option>
+          <option value="name_asc">Name (A–Z)</option>
+          <option value="year_desc">Vintage (newest)</option>
+          <option value="year_asc">Vintage (oldest)</option>
+          <option value="paid_desc">Price paid (high→low)</option>
+          <option value="paid_asc">Price paid (low→high)</option>
+          <option value="value_desc">Market value (high→low)</option>
+          <option value="score_desc">Vivino score (high→low)</option>
+          <option value="rating_desc">My rating (high→low)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="list" id="list"></div>
+</div>
+
+<div class="fab2" id="invoiceBtn" title="Import from invoice">📄</div>
+<div class="fab" id="addBtn">+</div>
+
+<!-- Add / edit sheet -->
+<div class="sheet-bg" id="sheetBg">
+  <div class="sheet" id="sheet">
+    <div class="grab"></div>
+    <h2 id="sheetTitle">Add a wine</h2>
+
+    <div class="photo-pick">
+      <div class="preview" id="preview">🍷</div>
+      <div class="pbtns">
+        <button class="btn-ghost btn-sm" id="takePhoto">📷 Take photo</button>
+        <button class="btn-line btn-sm" id="choosePhoto">🖼 Choose from library</button>
+      </div>
+    </div>
+    <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
+    <input type="file" id="libInput" accept="image/*" hidden>
+
+    <button class="btn-ghost" id="aiFill" style="width:100%; margin-bottom:14px">✨ Auto-fill details from this photo</button>
+
+    <div class="field"><label class="fld">Wine name *</label><input id="iName" placeholder="e.g. Château Margaux"></div>
+    <div class="row2">
+      <div class="field"><label class="fld">Country</label><input id="iCountry" list="countryList" placeholder="France"></div>
+      <div class="field"><label class="fld">Region</label><input id="iRegion" placeholder="Bordeaux"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label class="fld">Type</label>
+        <select id="iType">
+          <option value="">—</option>
+          <option>Red</option><option>White</option><option>Rosé</option><option>Orange</option>
+          <option>Sparkling</option><option>Dessert</option><option>Fortified</option>
+        </select>
+      </div>
+      <div class="field"><label class="fld">Vintage (year)</label><input id="iYear" type="number" inputmode="numeric" placeholder="2018"></div>
+    </div>
+    <div class="field"><label class="fld">Grape</label><input id="iGrape" placeholder="Cabernet blend"></div>
+    <div class="row2">
+      <div class="field"><label class="fld">Price paid (£ per bottle)</label><input id="iPaid" type="number" inputmode="decimal" placeholder="0.00"></div>
+      <div class="field"><label class="fld">Number of bottles</label><input id="iQty" type="number" inputmode="numeric" min="1" step="1" value="1"></div>
+    </div>
+    <div class="field"><label class="fld">Purchase date</label><input id="iDate" type="date"></div>
+    <div class="row2">
+      <div class="field"><label class="fld">Market price (£)</label><input id="iVprice" type="number" inputmode="decimal" placeholder="auto from photo"></div>
+      <div class="field"><label class="fld">Vivino score</label><input id="iVscore" type="number" inputmode="decimal" step="0.1" min="0" max="5" placeholder="4.2"></div>
+    </div>
+    <button class="btn-line btn-sm" id="getPriceBtn" type="button" style="margin-bottom:8px">💷 Fetch market price</button>
+    <div class="hint" id="priceStatus" style="display:none; margin-top:-4px"></div>
+    <div class="field" id="vivinoLinkWrap" style="margin-top:6px"><a class="link-vivino" id="vivinoLink" target="_blank" rel="noopener">🔎 Look this wine up on Vivino →</a></div>
+    <div class="field"><label class="fld">Storage location</label><select id="iLoc"></select></div>
+    <div class="field"><label class="fld">Notes (optional)</label><textarea id="iNotes" rows="2" placeholder="Drink window, occasion…"></textarea></div>
+
+    <div class="sheet-actions">
+      <button class="btn-line" id="cancelBtn">Cancel</button>
+      <button class="btn-primary" id="saveBtn">Save wine</button>
+    </div>
+  </div>
+</div>
+
+<!-- Locations sheet -->
+<div class="sheet-bg" id="locBg">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>Storage locations</h2>
+    <div class="loc-manage" id="locList"></div>
+    <hr>
+    <div class="addloc">
+      <input id="newLoc" placeholder="Add a location…">
+      <button class="btn-primary" style="width:auto;padding:11px 16px" id="addLocBtn">Add</button>
+    </div>
+    <div class="sheet-actions" style="margin-top:18px">
+      <button class="btn-line" id="closeLoc">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Backup & export sheet -->
+<div class="sheet-bg" id="backupBg">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>Backup &amp; export</h2>
+    <p style="font-size:13px; color:var(--muted); margin:0 0 14px">Your wines are saved only on this device. Export a backup now and again, and use it to move your collection to another phone or recover it if needed.</p>
+    <div id="backupStat" class="note-block" style="margin-bottom:16px"></div>
+    <button class="btn-primary" id="exportJson" style="width:100%; margin-bottom:10px">⬇ Export full backup (.json)</button>
+    <button class="btn-line" id="exportCsv" style="width:100%; margin-bottom:6px">📊 Export as spreadsheet (.csv)</button>
+    <div class="hint" style="margin-bottom:6px">The .json backup includes your bottle photos. The .csv is for opening in Excel/Numbers (no photos).</div>
+    <hr>
+    <p style="font-size:13px; color:var(--muted); margin:14px 0 10px">Restore from a backup file:</p>
+    <button class="btn-ghost" id="importMerge" style="width:100%; margin-bottom:10px">➕ Import &amp; merge (add new wines)</button>
+    <button class="btn-line" id="importReplace" style="width:100%; color:#b13b3b">♻ Import &amp; replace everything</button>
+    <input type="file" id="importInput" accept=".json,application/json" hidden>
+    <div class="sheet-actions" style="margin-top:20px">
+      <button class="btn-line" id="closeBackup">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI settings sheet -->
+<div class="sheet-bg" id="aiBg">
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="gate-acct"><span id="acctEmail" style="color:var(--muted)">Signed in</span><button class="btn-line btn-sm" id="signOutBtn">Sign out</button></div>
+    <h2>✨ AI auto-fill</h2>
+    <p style="font-size:13px; color:var(--muted); margin:0 0 14px">Paste an Anthropic API key and the app can read bottle labels and invoices for you. The key is stored only on this device and is sent directly to Anthropic — nowhere else.</p>
+    <div class="field"><label class="fld">Anthropic API key</label><input id="aiKeyInput" type="password" autocomplete="off" placeholder="sk-ant-…"></div>
+    <div class="field"><label class="fld">Model</label>
+      <select id="aiModelInput">
+        <option value="claude-sonnet-4-6">Claude Sonnet 4.6 — balanced (recommended)</option>
+        <option value="claude-haiku-4-5">Claude Haiku 4.5 — fastest &amp; cheapest</option>
+        <option value="claude-opus-4-8">Claude Opus 4.8 — most accurate</option>
+      </select>
+    </div>
+    <div class="field"><label class="fld">Market price lookups</label>
+      <select id="priceModeInput">
+        <option value="estimate">Quick estimate — free &amp; rough (recommended)</option>
+        <option value="web">Live web search — more current, ~1–4p each</option>
+      </select>
+    </div>
+    <a class="link-vivino" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get an API key from the Anthropic Console →</a>
+    <div class="hint" style="margin-top:8px">Tip: in the Console you can set a monthly spend limit on the key for peace of mind. Reading a label or invoice typically costs a fraction of a penny.</div>
+    <hr>
+    <button class="btn-line" id="shareBtn" style="width:100%">👥 Share cellar with someone</button>
+    <div class="sheet-actions" style="margin-top:18px">
+      <button class="btn-line" id="aiCancel">Close</button>
+      <button class="btn-primary" id="aiSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Share / household sheet -->
+<div class="sheet-bg" id="shareBg">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>👥 Share your cellar</h2>
+    <p style="font-size:13px; color:var(--muted); margin:0 0 14px">To share with your partner: they install the app and sign in once with their own Google account (this creates their account). They send you their <b>User ID</b>; you add it below. Then you give them your <b>Cellar ID</b> and they tap Join. After that you both see and edit the same cellar.</p>
+    <div class="field"><label class="fld">Your User ID — give this to a cellar owner so they can add you</label>
+      <div class="copyrow"><input id="myUid" readonly><button class="btn-line btn-sm" id="copyUid">Copy</button></div></div>
+    <div class="field"><label class="fld">Your Cellar ID — share this so others can join your cellar</label>
+      <div class="copyrow"><input id="myCellar" readonly><button class="btn-line btn-sm" id="copyCellar">Copy</button></div></div>
+    <hr>
+    <div class="field"><label class="fld">Add someone to your cellar (paste their User ID)</label>
+      <div class="copyrow"><input id="addMemberId" placeholder="their User ID"><button class="btn-primary btn-sm" id="addMemberBtn">Add</button></div></div>
+    <hr>
+    <div class="field"><label class="fld">Join someone else's cellar (paste their Cellar ID)</label>
+      <div class="copyrow"><input id="joinCellarId" placeholder="their Cellar ID"><button class="btn-primary btn-sm" id="joinCellarBtn">Join</button></div></div>
+    <div class="hint">Make sure they've added your User ID first. Joining switches you to their shared cellar (your current view is replaced).</div>
+    <div class="sheet-actions" style="margin-top:18px">
+      <button class="btn-line" id="closeShare">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invoice import sheet -->
+<div class="sheet-bg" id="invBg">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>📄 Import from invoice</h2>
+    <p style="font-size:13px; color:var(--muted); margin:0 0 14px">Take a photo of a wine invoice or pick a PDF. The app reads the wines and prices so you can add them all at once. Check the details before adding.</p>
+    <button class="btn-primary" id="invPick" style="width:100%; margin-bottom:10px">📷 Choose invoice photo or PDF</button>
+    <input type="file" id="invInput" accept="image/*,application/pdf" hidden>
+    <div id="invStatus" class="note-block" style="display:none"><span class="ai-spin"></span>Reading invoice…</div>
+    <div class="row2">
+      <div class="field"><label class="fld">Storage location</label><select id="invLoc"></select></div>
+      <div class="field"><label class="fld">Purchase date</label><input id="invDate" type="date"></div>
+    </div>
+    <div id="invItems"></div>
+    <div id="invAddWrap" style="display:none">
+      <label style="display:flex; gap:8px; align-items:center; font-size:13px; margin:4px 2px 10px"><input type="checkbox" id="invAutoPrice" checked style="width:auto"> Fetch market prices automatically (~1p each)</label>
+      <button class="btn-primary" id="invAddBtn" style="width:100%; margin-top:2px">➕ Add wines to cellar</button>
+    </div>
+    <div class="sheet-actions" style="margin-top:14px">
+      <button class="btn-line" id="invClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Drink / tasting-notes sheet -->
+<div class="sheet-bg" id="drinkBg">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2 id="drinkTitle">Drink this wine 🍷</h2>
+    <div id="drinkWineName" style="font-weight:600; margin:0 2px 16px; color:var(--accent)"></div>
+    <div class="field"><label class="fld">Date drunk</label><input id="dDate" type="date"></div>
+    <div class="field"><label class="fld">Your rating</label>
+      <div class="stars" id="dStars">
+        <span data-v="1">★</span><span data-v="2">★</span><span data-v="3">★</span><span data-v="4">★</span><span data-v="5">★</span>
+      </div>
+      <div class="hint">Tap a star to rate, tap it again to clear.</div>
+    </div>
+    <div class="field"><label class="fld">Food pairing</label><textarea id="dFood" rows="2" placeholder="What did you eat with it?"></textarea></div>
+    <div class="field"><label class="fld">Tasting notes</label><textarea id="dTasting" rows="3" placeholder="Aromas, flavours, how it drank, who you shared it with…"></textarea></div>
+    <div class="sheet-actions">
+      <button class="btn-line" id="drinkCancel">Cancel</button>
+      <button class="btn-primary" id="drinkSave">Move to Drunk</button>
+    </div>
+  </div>
+</div>
+
+<datalist id="countryList">
+  <option>France</option><option>Italy</option><option>Spain</option><option>Portugal</option>
+  <option>Germany</option><option>Austria</option><option>USA</option><option>Argentina</option>
+  <option>Chile</option><option>Australia</option><option>New Zealand</option><option>South Africa</option>
+  <option>England</option>
+</datalist>
+
+<div class="toast" id="toast"></div>
+<div class="toast" id="progress" style="bottom:calc(env(safe-area-inset-bottom) + 150px)"></div>
+
+<script>
+(function(){
+  "use strict";
+  var DB_KEY="wineIndex.bottles.v1", LOC_KEY="wineIndex.locations.v1";
+  var wines=load(DB_KEY,[]);
+  var locations=load(LOC_KEY,["Home","Winedrops","Berry Bros"]);
+  var editingId=null, pendingPhoto=null, currentView="active", drinkingId=null, drinkRating=0;
+  // migrate older records saved before the Cellar/Drunk split
+  wines.forEach(function(w){ if(!w.status) w.status="active"; });
+
+  // ---------- storage ----------
+  function load(k,def){ try{var v=JSON.parse(localStorage.getItem(k)); return v||def;}catch(e){return def;} }
+  function save(){ localStorage.setItem(DB_KEY,JSON.stringify(wines)); localStorage.setItem(LOC_KEY,JSON.stringify(locations)); cloudPush(); }
+  function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+  function qtyOf(w){ return Math.max(1, parseInt(w&&w.qty,10)||1); }
+  function meName(){
+    if(typeof fbUser==="undefined" || !fbUser) return "";
+    if(fbUser.displayName) return fbUser.displayName.split(" ")[0];
+    if(fbUser.email) return fbUser.email.split("@")[0];
+    return "";
+  }
+
+  // ---------- helpers ----------
+  function $(id){return document.getElementById(id);}
+  function money(n){ if(n===""||n==null||isNaN(n)) return "—"; return "£"+Number(n).toLocaleString("en-GB",{minimumFractionDigits:0,maximumFractionDigits:2}); }
+  function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];}); }
+  function toast(m){ var t=$("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove("show");},1800); }
+
+  // ---------- image resize ----------
+  function handleFile(file){
+    if(!file) return;
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        var max=900, w=img.width, h=img.height;
+        if(w>h && w>max){ h=Math.round(h*max/w); w=max; }
+        else if(h>=w && h>max){ w=Math.round(w*max/h); h=max; }
+        var c=document.createElement("canvas"); c.width=w; c.height=h;
+        c.getContext("2d").drawImage(img,0,0,w,h);
+        pendingPhoto=c.toDataURL("image/jpeg",0.78);
+        var p=$("preview"); p.style.backgroundImage="url("+pendingPhoto+")"; p.textContent="";
+        // Auto-read the label only when adding a NEW wine. When editing an existing
+        // record (e.g. adding a photo to an invoice-imported wine), just attach the
+        // photo — no label scan, no automatic price lookup.
+        if(editingId==null) runAutofill(false);
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ---------- render ----------
+  function uniq(key){ var s={}; wines.forEach(function(w){ if(w[key]) s[w[key]]=1; }); return Object.keys(s).sort(); }
+
+  function refreshFilterOptions(){
+    fill($("fCountry"),uniq("country"),$("fCountry").value);
+    var rc=$("fCountry").value;
+    var regions={};
+    wines.forEach(function(w){ if(w.region && (!rc||w.country===rc)) regions[w.region]=1; });
+    fill($("fRegion"),Object.keys(regions).sort(),$("fRegion").value);
+    fill($("fLoc"),locations.slice(),$("fLoc").value);
+  }
+  function fill(sel,arr,keep){
+    sel.innerHTML="<option value=''>All</option>"+arr.map(function(a){return "<option>"+esc(a)+"</option>";}).join("");
+    if(keep && arr.indexOf(keep)>=0) sel.value=keep;
+  }
+
+  function currentFiltered(){
+    var q=$("q").value.trim().toLowerCase();
+    var c=$("fCountry").value, r=$("fRegion").value, loc=$("fLoc").value, ty=$("fType").value;
+    var sc=parseFloat($("fScore").value), mn=parseFloat($("fMin").value), mx=parseFloat($("fMax").value);
+    var out=wines.filter(function(w){
+      if((w.status||"active")!==currentView) return false;
+      if(ty && (w.type||"")!==ty) return false;
+      if(c && w.country!==c) return false;
+      if(r && w.region!==r) return false;
+      if(loc && w.location!==loc) return false;
+      if(!isNaN(sc) && !(parseFloat(w.vscore)>=sc)) return false;
+      if(!isNaN(mn) && !(parseFloat(w.paid)>=mn)) return false;
+      if(!isNaN(mx) && !(parseFloat(w.paid)<=mx)) return false;
+      if(q){ var hay=(w.name+" "+w.grape+" "+w.region+" "+w.country+" "+w.year).toLowerCase(); if(hay.indexOf(q)<0) return false; }
+      return true;
+    });
+    var s=$("fSort").value;
+    out.sort(function(a,b){
+      switch(s){
+        case "name_asc": return (a.name||"").localeCompare(b.name||"");
+        case "year_desc": return (b.year||0)-(a.year||0);
+        case "year_asc": return (a.year||0)-(b.year||0);
+        case "paid_desc": return (b.paid||0)-(a.paid||0);
+        case "paid_asc": return (a.paid||0)-(b.paid||0);
+        case "value_desc": return (b.vprice||0)-(a.vprice||0);
+        case "score_desc": return (b.vscore||0)-(a.vscore||0);
+        case "rating_desc": return (b.rating||0)-(a.rating||0);
+        default:
+          if(currentView==="drunk") return (b.drunkAt||0)-(a.drunkAt||0);
+          return (b.added||0)-(a.added||0);
+      }
+    });
+    return out;
+  }
+
+  function byTag(w){ return (cellarMemberCount>1 && w.addedByName)?(' &middot; <span style="color:#9a6b8a">👤 '+esc(w.addedByName)+'</span>'):''; }
+  function typeChip(t){
+    if(!t) return "";
+    var c={Red:["#7b1e3b","#fff"],White:["#efe3a6","#5c4a16"],"Rosé":["#f2c1cf","#7a2a44"],Orange:["#e7944a","#3d1d05"],Sparkling:["#f5e7a0","#6b5a1a"],Dessert:["#e2ad3f","#4a2f08"],Fortified:["#5c2a2a","#fff"]}[t]||["#f1ede8","#5c554e"];
+    return '<span class="chip" style="background:'+c[0]+'; color:'+c[1]+'">'+esc(t)+'</span>';
+  }
+  function starStr(n){ n=parseInt(n,10)||0; return '<span class="rating-display">'+repeat("★",n)+repeat("☆",5-n)+'</span>'; }
+  function repeat(ch,n){ var s=""; for(var i=0;i<n;i++) s+=ch; return s; }
+
+  function render(){
+    refreshFilterOptions();
+    var data=currentFiltered();
+    var scope=wines.filter(function(w){return (w.status||"active")===currentView;});
+    var totalPaid=scope.reduce(function(s,w){return s+(parseFloat(w.paid)||0)*qtyOf(w);},0);
+    var bottleCount=scope.reduce(function(s,w){return s+qtyOf(w);},0);
+    $("stCount").textContent=bottleCount;
+    $("stPaid").textContent=money(totalPaid);
+    if(currentView==="drunk"){
+      var rated=scope.filter(function(w){return w.rating;});
+      var avg=rated.length?(rated.reduce(function(s,w){return s+w.rating;},0)/rated.length):0;
+      $("stCountL").textContent="Drunk";
+      $("stValueL").textContent="Avg rating";
+      $("stValue").textContent=avg?("★ "+avg.toFixed(1)):"—";
+    } else {
+      var totalVal=scope.reduce(function(s,w){return s+(parseFloat(w.vprice)||0)*qtyOf(w);},0);
+      $("stCountL").textContent="Bottles";
+      $("stValueL").textContent="Market value";
+      $("stValue").textContent=money(totalVal);
+    }
+    $("subline").textContent=scope.length?(data.length+" of "+scope.length+" shown")
+      :(currentView==="drunk"?"Wines you've enjoyed":"Your personal cellar");
+
+    var list=$("list");
+    if(!scope.length){
+      list.innerHTML = currentView==="drunk"
+        ? '<div class="empty-state"><div class="big">🥂</div><div>No wines drunk yet.<br>Open a bottle in your cellar and tap <b>🍷 Drink!</b></div></div>'
+        : '<div class="empty-state"><div class="big">🍷</div><div>No wines in your cellar yet.<br>Tap the + button to add your first bottle.</div></div>';
+      return;
+    }
+    if(!data.length){ list.innerHTML='<div class="empty-state"><div class="big">🔍</div><div>No wines match these filters.</div></div>'; return; }
+
+    list.innerHTML=data.map(function(w){
+      var thumb=w.photo
+        ? '<div class="thumb" style="background-image:url('+w.photo+')"></div>'
+        : '<div class="thumb empty" data-edit="'+w.id+'" role="button" title="Add a photo"><div class="ap">📷<small>Add photo</small></div></div>';
+      var loc=w.location?'<span class="chip loc">📍 '+esc(w.location)+'</span>':'';
+      var qchip=(currentView==="active"&&qtyOf(w)>1)?'<span class="chip">🍾 ×'+qtyOf(w)+'</span>':'';
+      var chips=typeChip(w.type)+[w.grape,w.region,w.country].filter(Boolean).map(function(x){return '<span class="chip">'+esc(x)+'</span>';}).join("")+qchip+loc;
+      var head='<h3>'+esc(w.name||"Untitled")+(w.year?' <span style="color:var(--muted);font-weight:500">'+esc(w.year)+'</span>':'')+'</h3>';
+      var vurl=vivinoUrl(w.name,w.year);
+
+      if(currentView==="drunk"){
+        var notes="";
+        if(w.food) notes+='<div class="note-block"><span class="lbl">Food pairing</span>'+esc(w.food)+'</div>';
+        if(w.tasting) notes+='<div class="note-block"><span class="lbl">Tasting notes</span>'+esc(w.tasting)+'</div>';
+        return '<div class="wine">'+thumb+'<div class="body">'+head+
+          '<div class="meta">'+(w.drunkDate?('Drunk '+esc(formatDate(w.drunkDate))):'')+(w.paid?(' &middot; Paid '+money(w.paid)):'')+byTag(w)+'</div>'+
+          '<div class="chips">'+chips+'</div>'+
+          '<div>'+(w.rating?starStr(w.rating):'<span style="color:var(--muted);font-size:13px">Not rated</span>')+'</div>'+
+          notes+
+          '<div class="cardacts">'+
+            '<button class="btn-ghost btn-sm" data-editnotes="'+w.id+'">Edit notes</button>'+
+            '<button class="btn-line btn-sm" data-return="'+w.id+'">↩ To cellar</button>'+
+            '<button class="btn-line btn-sm" data-del="'+w.id+'" style="color:#b13b3b">Delete</button>'+
+          '</div>'+
+        '</div></div>';
+      }
+
+      var score=w.vscore?'<span class="score">★ '+esc(w.vscore)+'</span>':'<span style="color:var(--muted)">—</span>';
+      var delta="";
+      if(w.paid && w.vprice){
+        var d=parseFloat(w.vprice)-parseFloat(w.paid);
+        delta=' <span class="'+(d>=0?'delta-up':'delta-down')+'" style="font-size:11px">('+(d>=0?'+':'')+money(d)+')</span>';
+      }
+      return '<div class="wine">'+thumb+'<div class="body">'+head+
+        '<div class="meta">'+(w.date?('Bought '+esc(formatDate(w.date))):'')+byTag(w)+'</div>'+
+        '<div class="chips">'+chips+'</div>'+
+        '<div class="pricerow">'+
+          '<div><span class="k">Paid</span><span class="v">'+money(w.paid)+'</span></div>'+
+          '<div><span class="k">Market</span><span class="v">'+money(w.vprice)+delta+'</span></div>'+
+          '<div><span class="k">Score</span><span class="v">'+score+'</span></div>'+
+        '</div>'+
+        '<div class="cardacts">'+
+          '<button class="btn-primary btn-sm" data-drink="'+w.id+'" style="width:auto;flex:0 0 auto">🍷 Drink!</button>'+
+          '<button class="btn-line btn-sm" data-edit="'+w.id+'">Edit</button>'+
+          '<a class="btn-ghost btn-sm" data-vivino="1" style="text-decoration:none;text-align:center" href="'+vurl+'" target="_blank" rel="noopener">Vivino</a>'+
+          '<button class="btn-line btn-sm" data-del="'+w.id+'" style="color:#b13b3b">Delete</button>'+
+        '</div>'+
+      '</div></div>';
+    }).join("");
+  }
+
+  function formatDate(d){ try{ return new Date(d+"T00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});}catch(e){return d;} }
+
+  // ---------- sheet ----------
+  function openSheet(wine){
+    editingId=wine?wine.id:null; pendingPhoto=wine?wine.photo:null;
+    $("sheetTitle").textContent=wine?"Edit wine":"Add a wine";
+    $("iName").value=wine?wine.name||"":"";
+    $("iCountry").value=wine?wine.country||"":"";
+    $("iRegion").value=wine?wine.region||"":"";
+    $("iGrape").value=wine?wine.grape||"":"";
+    $("iType").value=wine?wine.type||"":"";
+    $("iYear").value=wine?wine.year||"":"";
+    $("iPaid").value=wine?wine.paid||"":"";
+    $("iQty").value=wine?qtyOf(wine):1;
+    $("iDate").value=wine?wine.date||"":new Date().toISOString().slice(0,10);
+    $("iVprice").value=wine?wine.vprice||"":"";
+    $("iVscore").value=wine?wine.vscore||"":"";
+    $("iNotes").value=wine?wine.notes||"":"";
+    $("priceStatus").style.display="none";
+    rebuildLocSelect(wine?wine.location:locations[0]);
+    var p=$("preview");
+    if(pendingPhoto){ p.style.backgroundImage="url("+pendingPhoto+")"; p.textContent=""; }
+    else { p.style.backgroundImage="none"; p.textContent="🍷"; }
+    updateVivinoLink();
+    $("sheetBg").classList.add("open");
+  }
+  function closeSheet(){ $("sheetBg").classList.remove("open"); }
+
+  function rebuildLocSelect(sel){
+    $("iLoc").innerHTML=locations.map(function(l){return "<option"+(l===sel?" selected":"")+">"+esc(l)+"</option>";}).join("");
+  }
+
+  function vivinoUrl(name, year){
+    return "https://www.vivino.com/en/explore?search_term="+encodeURIComponent(((name||"")+" "+(year||"")).trim());
+  }
+  function isAndroid(){ return /Android/i.test(navigator.userAgent||""); }
+  // Open a Vivino URL in a browser, not the Vivino app.
+  // Android: force a browser (Chrome) via an intent: URL with an https fallback,
+  // which stops the installed Vivino app from capturing the link.
+  function vivinoOpen(httpsUrl){
+    if(isAndroid()){
+      try{
+        var u=new URL(httpsUrl);
+        window.location.href="intent://"+u.host+u.pathname+u.search+
+          "#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url="+
+          encodeURIComponent(httpsUrl)+";end";
+        return;
+      }catch(e){ /* fall through to normal open */ }
+    }
+    window.open(httpsUrl, "_blank", "noopener");
+  }
+  function updateVivinoLink(){
+    var n=$("iName").value.trim(), y=$("iYear").value.trim();
+    var wrap=$("vivinoLinkWrap");
+    if(n){ wrap.style.display="block"; $("vivinoLink").href=vivinoUrl(n,y); }
+    else wrap.style.display="none";
+  }
+
+  function saveWine(){
+    var name=$("iName").value.trim();
+    if(!name){ toast("Please enter a wine name"); $("iName").focus(); return; }
+    var rec={
+      id: editingId||uid(),
+      name:name,
+      country:$("iCountry").value.trim(),
+      region:$("iRegion").value.trim(),
+      grape:$("iGrape").value.trim(),
+      type:$("iType").value,
+      year:$("iYear").value?parseInt($("iYear").value,10):"",
+      paid:$("iPaid").value?parseFloat($("iPaid").value):"",
+      qty:Math.max(1, parseInt($("iQty").value,10)||1),
+      date:$("iDate").value,
+      vprice:$("iVprice").value?parseFloat($("iVprice").value):"",
+      vscore:$("iVscore").value?parseFloat($("iVscore").value):"",
+      location:$("iLoc").value,
+      notes:$("iNotes").value.trim(),
+      photo:pendingPhoto||null,
+      addedByName: editingId?(findWine(editingId).addedByName||""):meName(),
+      addedByUid: editingId?(findWine(editingId).addedByUid||""):(fbUser?fbUser.uid:""),
+      added: editingId?(findWine(editingId).added||Date.now()):Date.now()
+    };
+    if(editingId){
+      var old=findWine(editingId);
+      rec.status=old.status||"active";
+      rec.drunkDate=old.drunkDate; rec.drunkAt=old.drunkAt;
+      rec.food=old.food; rec.tasting=old.tasting; rec.rating=old.rating;
+      wines=wines.map(function(w){return w.id===editingId?rec:w;}); toast("Wine updated");
+    }
+    else { rec.status="active"; wines.unshift(rec); toast("Wine added 🍷"); }
+    save(); closeSheet(); render();
+  }
+  function findWine(id){ for(var i=0;i<wines.length;i++) if(wines[i].id===id) return wines[i]; return {}; }
+
+  // ---------- locations sheet ----------
+  function renderLocs(){
+    $("locList").innerHTML=locations.map(function(l){
+      var count=wines.filter(function(w){return w.location===l;}).length;
+      return '<div class="loc-item"><span><b>'+esc(l)+'</b> <span style="color:var(--muted);font-size:12px">'+count+' bottle'+(count===1?'':'s')+'</span></span>'+
+        '<button data-rmloc="'+esc(l)+'">Remove</button></div>';
+    }).join("")||'<div style="color:var(--muted);font-size:13px">No locations yet.</div>';
+  }
+
+  // ---------- events ----------
+  $("addBtn").onclick=function(){ openSheet(null); };
+  $("cancelBtn").onclick=closeSheet;
+  $("saveBtn").onclick=saveWine;
+  $("sheetBg").onclick=function(e){ if(e.target===this) closeSheet(); };
+  $("takePhoto").onclick=function(){ $("camInput").click(); };
+  $("choosePhoto").onclick=function(){ $("libInput").click(); };
+  $("camInput").onchange=function(){ handleFile(this.files[0]); this.value=""; };
+  $("libInput").onchange=function(){ handleFile(this.files[0]); this.value=""; };
+  $("iName").oninput=updateVivinoLink; $("iYear").oninput=updateVivinoLink;
+  // build from the current name/vintage and force a browser (not the Vivino app)
+  $("vivinoLink").addEventListener("click",function(e){
+    e.preventDefault();
+    vivinoOpen(vivinoUrl($("iName").value.trim(),$("iYear").value.trim()));
+  });
+
+  ["q","fType","fCountry","fRegion","fLoc","fScore","fMin","fMax","fSort"].forEach(function(id){
+    var el=$(id); el.addEventListener(id==="q"||id==="fMin"||id==="fMax"?"input":"change",render);
+  });
+
+  $("list").addEventListener("click",function(e){
+    var t=e.target;
+    t=(t.closest && t.closest("[data-edit],[data-del],[data-drink],[data-editnotes],[data-return],[data-vivino]"))||t;
+    var ed=t.getAttribute("data-edit"), dl=t.getAttribute("data-del");
+    var dr=t.getAttribute("data-drink"), en=t.getAttribute("data-editnotes"), rt=t.getAttribute("data-return");
+    if(t.getAttribute("data-vivino")){ e.preventDefault(); vivinoOpen(t.href); return; }
+    if(ed){ openSheet(findWine(ed)); }
+    if(dr){ openDrink(findWine(dr)); }
+    if(en){ openDrink(findWine(en)); }
+    if(rt){ returnToCellar(rt); }
+    if(dl){ if(confirm("Delete this wine from your index?")){ wines=wines.filter(function(w){return w.id!==dl;}); save(); render(); toast("Deleted"); } }
+  });
+
+  // ---------- tabs ----------
+  function setTab(){
+    $("tabActive").classList.toggle("active",currentView==="active");
+    $("tabDrunk").classList.toggle("active",currentView==="drunk");
+  }
+  $("tabActive").onclick=function(){ currentView="active"; setTab(); render(); };
+  $("tabDrunk").onclick=function(){ currentView="drunk"; setTab(); render(); };
+
+  // ---------- drink / tasting-notes sheet ----------
+  function paintStars(){ var s=$("dStars").children; for(var i=0;i<s.length;i++){ s[i].className=(i<drinkRating)?"on":""; } }
+  function openDrink(w){
+    if(!w||!w.id) return;
+    drinkingId=w.id; drinkRating=w.rating||0;
+    var already=w.status==="drunk";
+    $("drinkTitle").textContent=already?"Edit tasting notes 🥂":"Drink this wine 🍷";
+    $("drinkSave").textContent=already?"Save notes":"Move to Drunk";
+    $("drinkWineName").textContent=(w.name||"")+(w.year?(" "+w.year):"");
+    $("dDate").value=w.drunkDate||new Date().toISOString().slice(0,10);
+    $("dFood").value=w.food||"";
+    $("dTasting").value=w.tasting||"";
+    paintStars();
+    $("drinkBg").classList.add("open");
+  }
+  function saveDrink(){
+    var w=findWine(drinkingId); if(!w.id) return;
+    var wasDrunk=w.status==="drunk";
+    var date=$("dDate").value, food=$("dFood").value.trim(), tasting=$("dTasting").value.trim(), rating=drinkRating;
+    var remaining=0;
+    if(!wasDrunk && qtyOf(w)>1){
+      // drink ONE bottle: keep the rest in the cellar, log one as drunk
+      remaining=qtyOf(w)-1;
+      var clone=Object.assign({},w,{ id:uid(), qty:1, status:"drunk", drunkDate:date, drunkAt:Date.now(),
+        food:food, tasting:tasting, rating:rating, added:Date.now() });
+      w.qty=remaining;
+      wines=wines.map(function(x){return x.id===w.id?w:x;});
+      wines.unshift(clone);
+    } else {
+      w.status="drunk"; w.qty=1; w.drunkDate=date; if(!w.drunkAt) w.drunkAt=Date.now();
+      w.food=food; w.tasting=tasting; w.rating=rating;
+      wines=wines.map(function(x){return x.id===w.id?w:x;});
+    }
+    save();
+    $("drinkBg").classList.remove("open");
+    if(!wasDrunk){ currentView="drunk"; setTab(); toast(remaining>0?("Enjoy! "+remaining+" left in the cellar 🥂"):"Enjoy! Moved to Drunk 🥂"); }
+    else toast("Notes saved");
+    render();
+  }
+  function returnToCellar(id){
+    var w=findWine(id); if(!w.id) return;
+    w.status="active";
+    wines=wines.map(function(x){return x.id===id?w:x;});
+    save(); render(); toast("Returned to cellar");
+  }
+  $("dStars").addEventListener("click",function(e){
+    var v=e.target.getAttribute("data-v"); if(!v) return;
+    v=parseInt(v,10); drinkRating=(drinkRating===v)?0:v; paintStars();
+  });
+  $("drinkSave").onclick=saveDrink;
+  $("drinkCancel").onclick=function(){ $("drinkBg").classList.remove("open"); };
+  $("drinkBg").onclick=function(e){ if(e.target===this) this.classList.remove("open"); };
+
+  // locations
+  $("locBtn").onclick=function(){ renderLocs(); $("locBg").classList.add("open"); };
+  $("closeLoc").onclick=function(){ $("locBg").classList.remove("open"); render(); };
+  $("locBg").onclick=function(e){ if(e.target===this){ this.classList.remove("open"); render(); } };
+  $("addLocBtn").onclick=function(){
+    var v=$("newLoc").value.trim(); if(!v) return;
+    if(locations.indexOf(v)<0){ locations.push(v); save(); $("newLoc").value=""; renderLocs(); } else toast("Already exists");
+  };
+  $("newLoc").addEventListener("keydown",function(e){ if(e.key==="Enter") $("addLocBtn").click(); });
+  $("locList").addEventListener("click",function(e){
+    var l=e.target.getAttribute("data-rmloc"); if(!l) return;
+    var n=wines.filter(function(w){return w.location===l;}).length;
+    if(n>0 && !confirm(l+" has "+n+" bottle(s). They will keep the label but the location won’t be selectable. Remove anyway?")) return;
+    locations=locations.filter(function(x){return x!==l;}); save(); renderLocs();
+  });
+
+  // ---------- backup / export / import ----------
+  function todayStr(){ return new Date().toISOString().slice(0,10); }
+  function downloadBlob(content,type,filename){
+    var blob=new Blob([content],{type:type});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a"); a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(url);},1500);
+  }
+  function updateBackupStat(){
+    var drunk=wines.filter(function(w){return w.status==="drunk";}).length;
+    $("backupStat").innerHTML="<b>"+wines.length+"</b> wines &middot; <b>"+(wines.length-drunk)+"</b> in cellar &middot; <b>"+drunk+"</b> drunk &middot; <b>"+locations.length+"</b> locations";
+  }
+  function exportJson(){
+    var data={app:"Wine Index", version:1, exported:new Date().toISOString(), locations:locations, wines:wines};
+    downloadBlob(JSON.stringify(data,null,2),"application/json","wine-index-backup-"+todayStr()+".json");
+    toast("Backup downloaded");
+  }
+  function csvCell(v){ if(v==null) v=""; v=String(v); return /[",\n\r]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v; }
+  function exportCsv(){
+    var cols=["name","year","type","country","region","grape","qty","paid","vprice","vscore","date","location","status","drunkDate","rating","food","tasting","notes"];
+    var head=["Wine","Vintage","Type","Country","Region","Grape","Bottles","Price paid","Market price","Vivino score","Purchase date","Location","Status","Date drunk","My rating","Food pairing","Tasting notes","Notes"];
+    var rows=[head.map(csvCell).join(",")];
+    wines.forEach(function(w){ rows.push(cols.map(function(c){return csvCell(w[c]);}).join(",")); });
+    downloadBlob("﻿"+rows.join("\r\n"),"text/csv","wine-index-"+todayStr()+".csv");
+    toast("Spreadsheet downloaded");
+  }
+  var importMode="merge";
+  $("backupBtn").onclick=function(){ updateBackupStat(); $("backupBg").classList.add("open"); };
+  $("closeBackup").onclick=function(){ $("backupBg").classList.remove("open"); };
+  $("backupBg").onclick=function(e){ if(e.target===this) this.classList.remove("open"); };
+  $("exportJson").onclick=exportJson;
+  $("exportCsv").onclick=exportCsv;
+  $("importMerge").onclick=function(){ importMode="merge"; $("importInput").click(); };
+  $("importReplace").onclick=function(){ importMode="replace"; $("importInput").click(); };
+  $("importInput").onchange=function(){
+    var f=this.files[0]; this.value=""; if(!f) return;
+    var r=new FileReader();
+    r.onload=function(e){
+      var data;
+      try{ data=JSON.parse(e.target.result); }catch(err){ toast("That file isn't a valid backup"); return; }
+      var inWines=Array.isArray(data)?data:(data&&data.wines);
+      if(!inWines||!inWines.length){ toast("No wines found in that file"); return; }
+      inWines.forEach(function(w){ if(!w.status) w.status="active"; if(!w.id) w.id=uid(); });
+      var inLocs=(data&&data.locations)||[];
+      if(importMode==="replace"){
+        if(!confirm("Replace your current "+wines.length+" wine(s) with "+inWines.length+" from the backup? This can’t be undone.")) return;
+        wines=inWines.slice();
+        if(inLocs.length) locations=inLocs.slice();
+        save(); updateBackupStat(); render(); toast("Collection restored");
+      } else {
+        var have={}; wines.forEach(function(w){have[w.id]=1;});
+        var added=0;
+        inWines.forEach(function(w){ if(!have[w.id]){ wines.push(w); added++; } });
+        inLocs.forEach(function(l){ if(locations.indexOf(l)<0) locations.push(l); });
+        save(); updateBackupStat(); render(); toast(added+" new wine(s) imported");
+      }
+    };
+    r.readAsText(f);
+  };
+
+  // ---------- AI auto-fill (Anthropic) ----------
+  var AI_KEY="wineIndex.aiKey", AI_MODEL="wineIndex.aiModel", PRICE_MODE="wineIndex.priceMode";
+  var CHEAP_MODEL="claude-haiku-4-5";   // price lookups always use the cheapest model
+  function hasKey(){ return !!localStorage.getItem(AI_KEY); }
+  function priceMode(){ return localStorage.getItem(PRICE_MODE)||"estimate"; }
+  function fileToB64(file){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(e){ res(e.target.result.split(",")[1]); }; r.onerror=rej; r.readAsDataURL(file); }); }
+  function parseJsonLoose(txt){
+    txt=(txt||"").trim().replace(/^```(?:json)?/i,"").replace(/```$/,"").trim();
+    var s=txt.search(/[\[{]/); if(s>0) txt=txt.slice(s);
+    var e=Math.max(txt.lastIndexOf("}"),txt.lastIndexOf("]")); if(e>=0) txt=txt.slice(0,e+1);
+    return JSON.parse(txt);
+  }
+  function aiError(err){
+    if(err && err.message==="NO_KEY"){ openAi(); return; }
+    console.error(err);
+    var msg=(err&&err.message)||"";
+    if(/401|authentication|invalid x-api-key/i.test(msg)) toast("API key rejected — check it in ✨ settings");
+    else if(/429|rate|overloaded|529/i.test(msg)) toast("AI busy — try again in a moment");
+    else toast("Couldn't read that — check key & connection");
+  }
+  async function callClaude(parts, opts){
+    opts=opts||{};
+    var key=localStorage.getItem(AI_KEY)||"";
+    if(!key) throw new Error("NO_KEY");
+    var model=opts.model||localStorage.getItem(AI_MODEL)||"claude-sonnet-4-6";
+    var messages=[{role:"user",content:parts}];
+    var body={ model:model, max_tokens:opts.maxTokens||1024, messages:messages };
+    if(opts.tools) body.tools=opts.tools;
+    // loop to handle server-tool "pause_turn" continuations (e.g. web search)
+    for(var i=0;i<5;i++){
+      var res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{
+          "content-type":"application/json",
+          "x-api-key":key,
+          "anthropic-version":"2023-06-01",
+          "anthropic-dangerous-direct-browser-access":"true"
+        },
+        body:JSON.stringify(body)
+      });
+      if(!res.ok){ throw new Error("API "+res.status+": "+(await res.text())); }
+      var data=await res.json();
+      if(data.stop_reason==="pause_turn"){ messages.push({role:"assistant",content:data.content}); continue; }
+      return (data.content||[]).filter(function(b){return b.type==="text";}).map(function(b){return b.text||"";}).join("");
+    }
+    return "";
+  }
+
+  // settings sheet
+  function openAi(){
+    $("aiKeyInput").value=localStorage.getItem(AI_KEY)||"";
+    $("aiModelInput").value=localStorage.getItem(AI_MODEL)||"claude-sonnet-4-6";
+    $("priceModeInput").value=priceMode();
+    $("acctEmail").textContent=(fbUser&&fbUser.email)?("Signed in as "+fbUser.email):"Signed in";
+    $("aiBg").classList.add("open");
+  }
+  $("aiBtn").onclick=openAi;
+  $("aiCancel").onclick=function(){ $("aiBg").classList.remove("open"); };
+  $("aiBg").onclick=function(e){ if(e.target===this) this.classList.remove("open"); };
+  $("aiSave").onclick=function(){
+    localStorage.setItem(AI_KEY,$("aiKeyInput").value.trim());
+    localStorage.setItem(AI_MODEL,$("aiModelInput").value);
+    localStorage.setItem(PRICE_MODE,$("priceModeInput").value);
+    $("aiBg").classList.remove("open"); toast("AI settings saved ✨");
+  };
+
+  // bottle-label auto-fill (inside add sheet). overwrite=true for the manual button,
+  // overwrite=false for the automatic run when a photo is taken (only fills blank fields).
+  async function runAutofill(overwrite){
+    if(!pendingPhoto){ if(overwrite) toast("Take or choose a bottle photo first"); return; }
+    if(!hasKey()){ if(overwrite) openAi(); return; }   // stay quiet on auto-run if no key set
+    var btn=$("aiFill"), old=btn.innerHTML; btn.disabled=true; btn.innerHTML='<span class="ai-spin"></span>Reading label…';
+    try{
+      var prompt="You are reading a wine bottle label from a photo. Return ONLY a JSON object (no prose, no markdown fences) with keys: "+
+        "name, country, region, grape, year, type, notes. name = producer and cuvée/wine name. grape = the main grape variety or blend "+
+        "(use your knowledge of the wine if the label doesn't state it). year = the vintage as a number, or null. region = wine region. "+
+        "type = one of exactly: Red, White, Rosé, Orange, Sparkling, Dessert, Fortified (use your knowledge of the wine if needed). "+
+        "Use null for anything you genuinely cannot determine. Never invent a price.";
+      var txt=await callClaude([
+        {type:"image",source:{type:"base64",media_type:"image/jpeg",data:pendingPhoto.split(",")[1]}},
+        {type:"text",text:prompt}
+      ],{maxTokens:700});
+      var d=parseJsonLoose(txt);
+      function setf(id,val){ if(val==null||val==="") return; if(overwrite || !$(id).value.trim()) $(id).value=val; }
+      setf("iName",d.name); setf("iCountry",d.country); setf("iRegion",d.region); setf("iGrape",d.grape); setf("iType",d.type);
+      if(d.year && (overwrite || !$("iYear").value.trim())) $("iYear").value=d.year;
+      if(d.notes && !$("iNotes").value.trim()) $("iNotes").value=d.notes;
+      updateVivinoLink();                         // feed the detected name into the Vivino search
+      toast("Filled from the label — please check ✨");
+      var nm=$("iName").value.trim();
+      if(nm) findPrice(nm,$("iYear").value.trim());  // then look up the market price
+    }catch(err){ aiError(err); }
+    finally{ btn.disabled=false; btn.innerHTML=old; }
+  }
+  $("aiFill").onclick=function(){ runAutofill(true); };
+  $("getPriceBtn").onclick=function(){
+    var nm=$("iName").value.trim(); if(!nm){ toast("Enter or scan a wine name first"); return; }
+    if(!hasKey()){ openAi(); return; }
+    findPrice(nm,$("iYear").value.trim());
+  };
+
+  // market price = average of the three lowest UK shopping prices, via Claude web search
+  // tolerant parse of a "RESULT: price=..; low=..; high=.." line (or any £ figure)
+  function parsePriceResult(txt){
+    var res={price:null, low:null, high:null};
+    var line=(txt.match(/RESULT:[^\n]*/i)||[])[0]||txt;
+    function gnum(re){ var m=line.match(re); return m?parseFloat(m[1].replace(/,/g,"")):null; }
+    res.price=gnum(/price\s*=\s*£?\s*([0-9][0-9,]*\.?[0-9]*)/i);
+    res.low =gnum(/low\s*=\s*£?\s*([0-9][0-9,]*\.?[0-9]*)/i);
+    res.high=gnum(/high\s*=\s*£?\s*([0-9][0-9,]*\.?[0-9]*)/i);
+    if(res.price==null){ var m=txt.match(/£\s*([0-9][0-9,]*\.?[0-9]*)/); if(m) res.price=parseFloat(m[1].replace(/,/g,"")); }
+    return res;
+  }
+  // primary: web-search for a rough current price + range
+  async function lookupMarketPrice(name, year){
+    var q=(name+" "+(year||"")).trim();
+    var prompt="I want a rough market price (a ballpark for comparison, not exact) for the wine \""+q+"\", 750ml bottle, in GBP. "+
+      "Search current UK online wine retailers, then give a single representative typical price plus a low–high range across the shops you see. "+
+      "Approximate is fine — always give your best number even if listings are sparse; only omit it if you have truly no idea. "+
+      "Finish with exactly one line in this format and nothing after it:\n"+
+      "RESULT: price=<number GBP>; low=<number>; high=<number>";
+    var txt=await callClaude([{type:"text",text:prompt}],{
+      maxTokens:800, model:CHEAP_MODEL,
+      tools:[{type:"web_search_20250305", name:"web_search", max_uses:3,
+        user_location:{type:"approximate", city:"London", region:"England", country:"GB", timezone:"Europe/London"}}]
+    });
+    return parsePriceResult(txt);
+  }
+  // fallback / default: no-tools knowledge ballpark (free apart from a few tokens)
+  async function estimateNoTools(name, year){
+    var q=(name+" "+(year||"")).trim();
+    var prompt="Give a rough ballpark UK retail price in GBP for the wine \""+q+"\" (750ml), from your own knowledge — approximate is fine. "+
+      "Finish with exactly one line and nothing after it:\nRESULT: price=<number GBP>; low=<number>; high=<number>";
+    var txt=await callClaude([{type:"text",text:prompt}],{maxTokens:300, model:CHEAP_MODEL});
+    return parsePriceResult(txt);
+  }
+  async function findPrice(name, year){
+    if(!hasKey()) return;
+    var web=priceMode()==="web";
+    var st=$("priceStatus"); st.style.display="block";
+    st.innerHTML='<span class="ai-spin"></span>'+(web?"Checking live prices…":"Estimating price…");
+    var e=null, viaWeb=web;
+    if(web){
+      try{ e=await lookupMarketPrice(name,year); }catch(err){ console.error("price web",err); viaWeb=false; }
+      if(!(e && e.price!=null)){ viaWeb=false; try{ e=await estimateNoTools(name,year); }catch(err2){ console.error("price est",err2); } }
+    } else {
+      try{ e=await estimateNoTools(name,year); }catch(err){ console.error("price est",err); }
+    }
+    if(e && e.price!=null && !isNaN(parseFloat(e.price))){
+      $("iVprice").value=Math.round(parseFloat(e.price)*100)/100;
+      var range=(e.low!=null&&e.high!=null&&e.high>=e.low)?(" · seen £"+Math.round(e.low)+"–£"+Math.round(e.high)):"";
+      st.innerHTML="✨ "+(viaWeb?"Live price":"Estimate")+" ≈ £"+$("iVprice").value+range;
+    } else {
+      st.innerHTML="Couldn’t price this — please enter it manually.";
+    }
+  }
+  // headless price lookup (returns a number or null) for background/batch use
+  async function priceFor(name, year){
+    var e=null;
+    try{ e=await lookupMarketPrice(name,year); }catch(err){ console.error("price web",err); }
+    if(!(e && e.price!=null)){ try{ e=await estimateNoTools(name,year); }catch(err2){ console.error("price est",err2); } }
+    return (e && e.price!=null && !isNaN(parseFloat(e.price))) ? Math.round(parseFloat(e.price)*100)/100 : null;
+  }
+  function showProgress(msg){ var p=$("progress"); p.innerHTML='<span class="ai-spin"></span>'+msg; p.classList.add("show"); }
+  function hideProgress(){ $("progress").classList.remove("show"); }
+  // one cheap call: ballpark prices for a whole list of wines at once
+  async function estimateBatch(items){
+    var list=items.map(function(it,i){ return (i+1)+". "+it.name+(it.year?(" "+it.year):""); }).join("\n");
+    var prompt="Give a rough ballpark UK retail price in GBP (750ml bottle) for each wine below, from your own knowledge — approximate is fine. "+
+      "Return ONLY a JSON array of numbers (use null if you have no idea), in the SAME ORDER as the list, one entry per wine, no prose.\n"+list;
+    var txt=await callClaude([{type:"text",text:prompt}],{maxTokens:600, model:CHEAP_MODEL});
+    var arr=parseJsonLoose(txt);
+    return Array.isArray(arr)?arr:[];
+  }
+  // after an invoice import, add a market price for each new wine in the background
+  async function autoPriceImported(recs){
+    if(!hasKey()) return;
+    var todo=recs.filter(function(r){ return r.vprice===""||r.vprice==null; });
+    if(!todo.length) return;
+    // Estimate mode (default): a single cheap call for the whole invoice.
+    if(priceMode()!=="web"){
+      showProgress("Estimating prices…");
+      try{
+        var arr=await estimateBatch(todo); var n=0;
+        todo.forEach(function(r,i){ var p=arr[i]; if(p!=null && !isNaN(parseFloat(p))){ r.vprice=Math.round(parseFloat(p)*100)/100; n++; } });
+        save(); render(); hideProgress();
+        toast("Estimated prices for "+n+" wine"+(n===1?"":"s")+" 🍷");
+      }catch(err){ console.error(err); hideProgress(); toast("Couldn’t estimate prices — add them manually"); }
+      return;
+    }
+    // Live web mode: per-wine search (slower / costs ~1–4p each).
+    var done=0;
+    showProgress("Fetching live prices… 0/"+todo.length);
+    for(var i=0;i<todo.length;i++){
+      try{ var p=await priceFor(todo[i].name, todo[i].year); if(p!=null){ todo[i].vprice=p; save(); render(); } }
+      catch(err){ console.error(err); }
+      done++; showProgress("Fetching live prices… "+done+"/"+todo.length);
+    }
+    hideProgress();
+    toast("Live prices added for "+done+" wine"+(done===1?"":"s")+" 🍷");
+  }
+
+  // invoice import
+  var invoiceItems=[];
+  function rebuildInvLoc(){ $("invLoc").innerHTML=locations.map(function(l){return "<option>"+esc(l)+"</option>";}).join(""); }
+  function selectedCount(){ return invoiceItems.filter(function(w){return w._on!==false && (w.name||"").trim();}).length; }
+  function renderInvoiceItems(){
+    var c=$("invItems");
+    if(!invoiceItems.length){ c.innerHTML=""; $("invAddWrap").style.display="none"; return; }
+    c.innerHTML=invoiceItems.map(function(w,i){
+      return '<div class="invrow">'+
+        '<label style="display:flex; gap:8px; align-items:center; margin-bottom:8px; font-size:13px"><input type="checkbox" class="invchk" data-i="'+i+'" '+(w._on!==false?'checked':'')+' style="width:auto"> <b>Include this wine</b></label>'+
+        '<input class="invname" data-i="'+i+'" value="'+esc(w.name||"")+'" placeholder="Wine name">'+
+        '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:8px">'+
+          '<input class="invyear" data-i="'+i+'" value="'+esc(w.year||"")+'" placeholder="Vintage" inputmode="numeric">'+
+          '<input class="invpaid" data-i="'+i+'" value="'+esc(w.paid!=null?w.paid:"")+'" placeholder="£/bottle" inputmode="decimal">'+
+          '<input class="invqty" data-i="'+i+'" value="'+esc(w.quantity!=null?w.quantity:1)+'" placeholder="Qty" inputmode="numeric">'+
+        '</div>'+
+      '</div>';
+    }).join("");
+    $("invAddWrap").style.display="block";
+    $("invAddBtn").textContent="➕ Add "+selectedCount()+" wine"+(selectedCount()===1?"":"s")+" to cellar";
+  }
+  $("invItems").addEventListener("input",function(e){
+    var i=e.target.getAttribute("data-i"); if(i==null) return; i=+i;
+    if(e.target.classList.contains("invname")) invoiceItems[i].name=e.target.value;
+    if(e.target.classList.contains("invyear")) invoiceItems[i].year=e.target.value;
+    if(e.target.classList.contains("invpaid")) invoiceItems[i].paid=e.target.value;
+    if(e.target.classList.contains("invqty")) invoiceItems[i].quantity=e.target.value;
+    if(e.target.classList.contains("invname")) $("invAddBtn").textContent="➕ Add "+selectedCount()+" wine"+(selectedCount()===1?"":"s")+" to cellar";
+  });
+  $("invItems").addEventListener("change",function(e){
+    if(e.target.classList.contains("invchk")){ invoiceItems[+e.target.getAttribute("data-i")]._on=e.target.checked;
+      $("invAddBtn").textContent="➕ Add "+selectedCount()+" wine"+(selectedCount()===1?"":"s")+" to cellar"; }
+  });
+  async function scanInvoice(file){
+    if(!hasKey()){ openAi(); return; }
+    $("invStatus").style.display="block"; invoiceItems=[]; renderInvoiceItems();
+    try{
+      var b64=await fileToB64(file);
+      var part=(file.type==="application/pdf")
+        ? {type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}}
+        : {type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:b64}};
+      var prompt="This is a wine purchase invoice or order confirmation. Extract EVERY wine line item. "+
+        "Return ONLY a JSON array (no prose, no markdown fences). Each element: {name, country, region, grape, year, type, paid, quantity}. "+
+        "name = producer + wine name. year = vintage as a number or null. type = one of: Red, White, Rosé, Orange, Sparkling, Dessert, Fortified (use your knowledge of the wine). paid = price for a SINGLE bottle as a number "+
+        "(if a line shows a quantity and a line total, divide to get per-bottle), or null. quantity = number of bottles on that line (default 1). Use null for unknown fields. "+
+        "Ignore non-wine lines (delivery, duty, totals). If there are no wines, return [].";
+      var txt=await callClaude([part,{type:"text",text:prompt}],{maxTokens:2500});
+      var arr=parseJsonLoose(txt);
+      invoiceItems=(Array.isArray(arr)?arr:[]).map(function(w){ w._on=true; return w; });
+      $("invStatus").style.display="none";
+      if(!invoiceItems.length) toast("No wines found on that invoice");
+      renderInvoiceItems();
+    }catch(err){ $("invStatus").style.display="none"; aiError(err); }
+  }
+  $("invoiceBtn").onclick=function(){
+    if(!hasKey()){ openAi(); return; }
+    invoiceItems=[]; renderInvoiceItems(); $("invStatus").style.display="none";
+    rebuildInvLoc(); $("invDate").value=new Date().toISOString().slice(0,10);
+    $("invBg").classList.add("open");
+  };
+  $("invPick").onclick=function(){ $("invInput").click(); };
+  $("invInput").onchange=function(){ if(this.files[0]) scanInvoice(this.files[0]); this.value=""; };
+  $("invClose").onclick=function(){ $("invBg").classList.remove("open"); };
+  $("invBg").onclick=function(e){ if(e.target===this) this.classList.remove("open"); };
+  $("invAddBtn").onclick=function(){
+    var loc=$("invLoc").value, date=$("invDate").value;
+    var chosen=invoiceItems.filter(function(w){return w._on!==false && (w.name||"").trim();});
+    if(!chosen.length){ toast("Nothing selected to add"); return; }
+    var created=chosen.map(function(w){
+      var rec={ id:uid(), name:(w.name||"").trim(), country:w.country||"", region:w.region||"", grape:w.grape||"",
+        type:w.type||"", year:w.year?parseInt(w.year,10):"", paid:(w.paid!==""&&w.paid!=null&&!isNaN(parseFloat(w.paid)))?parseFloat(w.paid):"",
+        qty:Math.max(1, parseInt(w.quantity,10)||1),
+        date:date, vprice:"", vscore:"", location:loc, notes:"", photo:null, status:"active",
+        addedByName:meName(), addedByUid:(fbUser?fbUser.uid:""), added:Date.now() };
+      wines.unshift(rec); return rec;
+    });
+    save(); invoiceItems=[]; $("invBg").classList.remove("open");
+    currentView="active"; setTab(); render();
+    toast(chosen.length+" wine"+(chosen.length===1?"":"s")+" added from invoice 🍷");
+    if($("invAutoPrice").checked) autoPriceImported(created);   // fetch market prices in the background unless skipped
+  };
+
+  // ---------- Firebase: Google sign-in + Firestore sync ----------
+  // Paste your Firebase project's config here (or via the on-screen setup box).
+  // This is NOT secret — access is controlled by Firestore security rules. See FIREBASE-SYNC.md.
+  var FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAHq99nLaNy-5njad5krItZaHwDwKH4pjU", authDomain: "wine-index.firebaseapp.com", projectId: "wine-index", storageBucket: "wine-index.firebasestorage.app", messagingSenderId: "807113272042", appId: "1:807113272042:web:c01a37ba89f74d491f8593"
+  };
+  var fbUser=null, db=null, cellarId=null, cellarMemberCount=1, cloudCache={}, cloudLocCache="", migrated=false, syncStarted=false, lastWinesSig="";
+  function cellarRef(){ return db.collection("cellars").doc(cellarId); }
+
+  function setSync(state){
+    var p=$("syncPill"); if(!p) return;
+    if(!state){ p.style.display="none"; return; }
+    p.style.display="inline-flex";
+    p.className="syncpill "+(state==="synced"?"":state);
+    if(state==="syncing") p.innerHTML='<span class="ai-spin"></span>Syncing…';
+    else if(state==="offline") p.innerHTML='<span class="d"></span>Offline';
+    else if(state==="connecting") p.innerHTML='<span class="ai-spin"></span>Connecting…';
+    else p.innerHTML='<span class="d"></span>Synced';
+  }
+  window.addEventListener("offline", function(){ if(fbUser) setSync("offline"); });
+  window.addEventListener("online", function(){ if(fbUser) setSync("syncing"); });
+
+  function fbConfig(){
+    if(FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey) return FIREBASE_CONFIG;
+    try{ var s=localStorage.getItem("wineIndex.fb"); if(s){ var c=JSON.parse(s); if(c && c.apiKey) return c; } }catch(e){}
+    return null;
+  }
+  function showGate(mode,msg){
+    var g=$("authGate"); if(!g) return; g.style.display="flex";
+    $("gateSignin").style.display = (mode==="signin")?"block":"none";
+    $("gateConfig").style.display = (mode==="config")?"block":"none";
+    $("gateMsg").textContent = msg||"";
+  }
+  function hideGate(){ var g=$("authGate"); if(g) g.style.display="none"; }
+
+  function initFirebase(){
+    var cfg=fbConfig();
+    if(!cfg){ showGate("config"); return; }
+    if(typeof firebase==="undefined"){ showGate("signin","Couldn’t load Firebase — check your connection and reload."); return; }
+    try{ firebase.initializeApp(cfg); }catch(e){ /* already initialised */ }
+    db=firebase.firestore();
+    try{ db.enablePersistence({synchronizeTabs:true}).catch(function(){}); }catch(e){}
+    firebase.auth().getRedirectResult().catch(function(e){ console.error(e); showGate("signin", (e&&e.message)||"Sign-in failed"); });
+    firebase.auth().onAuthStateChanged(function(user){
+      fbUser=user||null;
+      if(user){ hideGate(); if(!syncStarted){ syncStarted=true; resolveCellarThenSync(); } }
+      else { showGate("signin"); }
+    });
+  }
+  // Work out which shared cellar this account belongs to (creating their own if new).
+  function resolveCellarThenSync(){
+    setSync("connecting");
+    var udoc=db.collection("users").doc(fbUser.uid);
+    udoc.get().then(function(snap){
+      var d=snap.exists?snap.data():null;
+      if(d && d.cellarId){ cellarId=d.cellarId; startSync(); return; }
+      // New account: create a personal cellar (id = uid) and point the user at it.
+      cellarId=fbUser.uid;
+      cellarRef().set({members:[fbUser.uid], createdBy:fbUser.uid}, {merge:true})
+        .then(function(){ return udoc.set({cellarId:cellarId}, {merge:true}); })
+        .then(function(){ startSync(); })
+        .catch(function(e){ console.error(e); startSync(); });
+    }).catch(function(e){ console.error(e); cellarId=fbUser.uid; startSync(); });
+  }
+  function signIn(){
+    var provider=new firebase.auth.GoogleAuthProvider();
+    setSync("connecting");
+    // Popup is reliable across domains (e.g. GitHub Pages); redirect breaks when the
+    // browser blocks the cross-domain storage it depends on. Fall back to redirect
+    // only if a popup is genuinely unavailable (e.g. blocked, or installed PWA).
+    firebase.auth().signInWithPopup(provider).catch(function(e){
+      console.error(e);
+      var code=e&&e.code;
+      if(code==="auth/popup-blocked" || code==="auth/operation-not-supported-in-this-environment" || code==="auth/cancelled-popup-request"){
+        firebase.auth().signInWithRedirect(provider).catch(function(e2){ showGate("signin","Sign-in failed: "+((e2&&e2.message)||e2)); });
+      } else {
+        setSync("");
+        showGate("signin","Sign-in failed: "+((e&&e.message)||e));
+      }
+    });
+  }
+  function signOut(){ try{ firebase.auth().signOut(); }catch(e){} }
+
+  function rebuildCloudCache(){ cloudCache={}; wines.forEach(function(w){ cloudCache[w.id]=JSON.stringify(w); }); }
+  function startSync(){
+    setSync("connecting");
+    var cref=cellarRef();
+    cref.onSnapshot(function(doc){
+      var d=(doc.exists?doc.data():null)||{};
+      cellarMemberCount=(d.members && d.members.length)||1;
+      if(Array.isArray(d.locations)){ locations=d.locations; cloudLocCache=JSON.stringify(locations); localStorage.setItem(LOC_KEY,JSON.stringify(locations)); }
+      render();
+    }, function(err){ console.error(err); if(err&&err.code==="permission-denied"){ setSync("offline"); toast("Not a member of that cellar yet"); } });
+    cref.collection("wines").onSnapshot({includeMetadataChanges:true}, function(snap){
+      var md=snap.metadata;
+      setSync(md.hasPendingWrites?"syncing":(navigator.onLine?"synced":"offline"));
+      var arr=[]; snap.forEach(function(d){ arr.push(d.data()); });
+      if(arr.length===0 && wines.length>0 && !migrated){ migrated=true; cloudCache={}; cloudLocCache=""; cloudPush(); return; }
+      migrated=true;
+      var sig=JSON.stringify(arr);
+      if(sig===lastWinesSig) return;   // metadata-only change, data unchanged
+      lastWinesSig=sig;
+      wines=arr.map(function(w){ if(!w.status) w.status="active"; return w; });
+      rebuildCloudCache();
+      localStorage.setItem(DB_KEY,JSON.stringify(wines));
+      render();
+    }, function(err){ console.error(err); });
+  }
+  function cloudPush(){
+    if(!fbUser || !db || !cellarId) return;
+    var cref=cellarRef(), col=cref.collection("wines"), changed=false;
+    wines.forEach(function(w){
+      var s=JSON.stringify(w);
+      if(cloudCache[w.id]!==s){ col.doc(String(w.id)).set(w).catch(function(e){console.error(e);}); cloudCache[w.id]=s; changed=true; }
+    });
+    Object.keys(cloudCache).forEach(function(id){
+      if(!wines.some(function(w){return String(w.id)===String(id);})){ col.doc(String(id)).delete().catch(function(){}); delete cloudCache[id]; changed=true; }
+    });
+    var ls=JSON.stringify(locations);
+    if(ls!==cloudLocCache){ cref.set({locations:locations},{merge:true}).catch(function(e){console.error(e);}); cloudLocCache=ls; changed=true; }
+    if(changed) setSync(navigator.onLine?"syncing":"offline");
+  }
+
+  $("gateSignInBtn").onclick=signIn;
+  $("signOutBtn").onclick=signOut;
+  $("fbSaveCfg").onclick=function(){
+    var raw=$("fbCfgInput").value.trim(), cfg=null;
+    try{ cfg=JSON.parse(raw); }catch(e){
+      try{ var m=raw.match(/\{[\s\S]*\}/); if(m) cfg=(new Function("return ("+m[0]+")"))(); }catch(e2){}
+    }
+    if(!cfg || !cfg.apiKey){ $("gateMsg").textContent="That doesn’t look like a Firebase config."; return; }
+    localStorage.setItem("wineIndex.fb", JSON.stringify(cfg));
+    location.reload();
+  };
+
+  // ---------- share / household ----------
+  function copyText(val){
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(val).then(function(){toast("Copied");},function(){}); }
+    else { toast("Select and copy manually"); }
+  }
+  $("shareBtn").onclick=function(){
+    if(!fbUser){ toast("Sign in first"); return; }
+    $("myUid").value=fbUser.uid;
+    $("myCellar").value=cellarId||fbUser.uid;
+    $("addMemberId").value=""; $("joinCellarId").value="";
+    $("aiBg").classList.remove("open");
+    $("shareBg").classList.add("open");
+  };
+  $("closeShare").onclick=function(){ $("shareBg").classList.remove("open"); };
+  $("shareBg").onclick=function(e){ if(e.target===this) this.classList.remove("open"); };
+  $("copyUid").onclick=function(){ copyText($("myUid").value); };
+  $("copyCellar").onclick=function(){ copyText($("myCellar").value); };
+  $("addMemberBtn").onclick=function(){
+    var id=$("addMemberId").value.trim(); if(!id){ toast("Paste their User ID"); return; }
+    if(!db||!cellarId){ toast("Not ready yet"); return; }
+    cellarRef().update({members: firebase.firestore.FieldValue.arrayUnion(id)})
+      .then(function(){ toast("Added — they can now join your cellar 🍷"); $("addMemberId").value=""; })
+      .catch(function(e){ console.error(e); toast("Couldn’t add — check the ID"); });
+  };
+  $("joinCellarBtn").onclick=function(){
+    var cid=$("joinCellarId").value.trim(); if(!cid){ toast("Paste their Cellar ID"); return; }
+    if(cid===cellarId){ toast("That's already your cellar"); return; }
+    db.collection("users").doc(fbUser.uid).set({cellarId:cid},{merge:true})
+      .then(function(){ toast("Joined — reloading…"); setTimeout(function(){ location.reload(); },700); })
+      .catch(function(e){ console.error(e); toast("Couldn’t join — check the ID"); });
+  };
+
+  // ---------- service worker ----------
+  if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(function(){}); }
+
+  render();
+  initFirebase();
+})();
+</script>
+</body>
+</html>
