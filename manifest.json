@@ -1,0 +1,21 @@
+{
+  "id": "/",
+  "name": "Wine Index",
+  "short_name": "Wine Index",
+  "description": "Track the bottles of wine in your storage.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone"],
+  "orientation": "portrait",
+  "lang": "en-GB",
+  "dir": "ltr",
+  "categories": ["food", "lifestyle"],
+  "background_color": "#f6f5f3",
+  "theme_color": "#7b1e3b",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
